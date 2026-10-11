@@ -1,8 +1,12 @@
 # COAT
  Chess Opening Analysis Tool
 
+**[Try it live](https://notkornflakes.github.io/COAT/)**
+
 COAT is a browser app for studying chess openings using open data. It has no
 backend, and everything runs in your browser.
+
+![COAT showing the Ruy Lopez: the board, the engine's top three lines, and the named book moves that continue from the position](docs/screenshot.png)
 
 ## What it does
 
@@ -78,6 +82,12 @@ Pushing to `main` deploys the app to GitHub Pages through
 `.github/workflows/pages.yml`. Before the first deploy, enable Pages in the
 repository settings: **Settings → Pages → Source: GitHub Actions**.
 
+## Built with
+
+TypeScript, [Vite](https://vite.dev/), [chess.js](https://github.com/jhlywa/chess.js)
+for move rules, and [Vitest](https://vitest.dev/) for tests. The board is a
+small hand-written component with no UI framework.
+
 ## Known limitations
 
 - The move list keeps a single line. Playing a different move from an earlier
@@ -86,3 +96,9 @@ repository settings: **Settings → Pages → Source: GitHub Actions**.
   system fonts.
 - Engine evaluations exist only for positions in Lichess's cloud database. A
   local engine (Stockfish WebAssembly) would be a natural next step.
+
+## License
+
+The code is released under the [MIT License](LICENSE). The opening dataset in
+`data/chess-openings/` is from lichess-org/chess-openings and is dedicated to
+the public domain under [CC0](data/chess-openings/COPYING.txt).
