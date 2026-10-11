@@ -1,9 +1,11 @@
+// Self-hosted font: no requests to third-party font servers.
+import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
 import { Chess } from 'chess.js';
 import data from './data/openings.json';
 import { OpeningBook, uciToMove, type Opening, type OpeningData } from './chess/openings';
 import { Board } from './ui/board';
-import { formatCount, formatEval, h, resultBar, storage } from './ui/dom';
+import { formatCount, formatEval, h, resultBar, storage, token as savedToken } from './ui/dom';
 import { cloudEval, explorer, ApiError, lichessUserGames, type ExplorerDb } from './api/lichess';
 import { chessComUserGames } from './api/chesscom';
 import {
@@ -450,6 +452,8 @@ let explorerAbort: AbortController | null = null;
 
 function tokenForm(message?: string) {
   const input = h('input', { type: 'password', placeholder: 'lip_…', 'aria-label': 'Lichess API token', autocomplete: 'off' });
+  const remember = h('input', { type: 'checkbox', id: 'remember-token' });
+  const formError = h('p', { class: 'form-error', role: 'alert' });
   explorerBody.replaceChildren(
     h(
       'p',
@@ -463,13 +467,23 @@ function tokenForm(message?: string) {
         class: 'token-form',
         onsubmit: (e: Event) => {
           e.preventDefault();
-          if (!input.value.trim()) return;
-          storage('coat.token', input.value.trim());
+          const value = input.value.trim();
+          if (!/^lip_[A-Za-z0-9_-]{8,}$/.test(value)) {
+            formError.textContent = 'Lichess tokens start with “lip_”. Copy the whole token from the Lichess page.';
+            return;
+          }
+          savedToken.set(value, remember.checked);
           scheduleExplorer();
         },
       },
-      input,
-      h('button', { type: 'submit', class: 'btn' }, 'Save token'),
+      h('div', { class: 'token-row' }, input, h('button', { type: 'submit', class: 'btn' }, 'Save token')),
+      h(
+        'label',
+        { class: 'check', for: 'remember-token' },
+        remember,
+        'Remember on this device. Otherwise the token is forgotten when you close this tab.',
+      ),
+      formError,
     ),
     h(
       'p',
@@ -479,7 +493,7 @@ function tokenForm(message?: string) {
         { href: 'https://lichess.org/account/oauth/token/create?description=COAT+opening+explorer', target: '_blank', rel: 'noopener' },
         'Create a token on Lichess',
       ),
-      '. It is saved only in this browser.',
+      '. Leave every permission unticked. The token is only ever sent to Lichess.',
     ),
   );
 }
@@ -487,7 +501,7 @@ function tokenForm(message?: string) {
 function scheduleExplorer() {
   clearTimeout(explorerTimer);
   explorerAbort?.abort();
-  const token = storage('coat.token');
+  const token = savedToken.get();
   ratingSelect.hidden = dbSelect.value !== 'lichess';
   if (!token) {
     tokenForm();
@@ -539,13 +553,13 @@ function scheduleExplorer() {
         h(
           'p',
           { class: 'hint' },
-          h('button', { type: 'button', class: 'link', onclick: () => (storage('coat.token', null), scheduleExplorer()) }, 'Remove saved token'),
+          h('button', { type: 'button', class: 'link', onclick: () => (savedToken.clear(), scheduleExplorer()) }, 'Remove token'),
         ),
       );
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       if (err instanceof ApiError && err.status === 401) {
-        storage('coat.token', null);
+        savedToken.clear();
         tokenForm('Lichess rejected the saved token. Create a new one and paste it here.');
         return;
       }

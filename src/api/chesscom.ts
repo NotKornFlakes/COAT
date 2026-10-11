@@ -29,6 +29,20 @@ export function chessComOutcome(result: string): 'win' | 'draw' | 'loss' {
   return 'loss';
 }
 
+/** True for https://api.chess.com/pub/player/<user>/games/<yyyy>/<mm> */
+export function isChessComArchive(url: string, user: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'api.chess.com' &&
+      new RegExp(`^/pub/player/${user.replace(/[^a-z0-9_-]/gi, '')}/games/\\d{4}/\\d{2}$`, 'i').test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Most recent standard-chess games for a user, newest months first. */
 export async function chessComUserGames(
   username: string,
@@ -43,7 +57,9 @@ export async function chessComUserGames(
   const { archives } = (await res.json()) as { archives: string[] };
 
   const games: ChessComGame[] = [];
-  for (const archive of [...archives].reverse()) {
+  // Only follow archive links that point back at the chess.com API.
+  const safe = archives.filter((a) => isChessComArchive(a, user));
+  for (const archive of safe.reverse()) {
     const r = await fetch(archive, { signal });
     if (!r.ok) throw new ApiError(`Could not load ${archive} (${r.status})`, r.status);
     const month = ((await r.json()) as { games: ChessComGame[] }).games

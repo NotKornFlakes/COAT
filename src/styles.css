@@ -16,7 +16,7 @@
   --bar-edge: #27302b;
   --good: #2f6b3e;
   --bad: #a3392c;
-  --font: 'Archivo', system-ui, sans-serif;
+  --font: 'Archivo Variable', system-ui, sans-serif;
   --radius-s: 4px;
   --radius-m: 8px;
   color-scheme: light;
@@ -747,13 +747,28 @@ textarea {
 }
 
 .token-form {
-  display: flex;
+  display: grid;
   gap: 8px;
   margin-bottom: 8px;
   max-width: 460px;
 }
-.token-form .btn {
+.token-row {
+  display: flex;
+  gap: 8px;
+}
+.token-row .btn {
   flex-shrink: 0;
+}
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.check input {
+  margin-top: 4px;
+  accent-color: var(--pen);
 }
 button.link {
   border: 0;
