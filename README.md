@@ -39,7 +39,7 @@ Lines can be shared as links. The URL hash holds the moves, for example
 | --- | --- | --- |
 | Opening names, ECO codes, book lines | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | CC0. Bundled in `data/chess-openings/`, so it works offline |
 | Engine evaluations | [Lichess cloud eval API](https://lichess.org/api#tag/Analysis) | No account needed. Only covers positions Lichess has stored, which includes most common opening positions |
-| Move statistics | [Lichess opening explorer](https://lichess.org/api#tag/Opening-Explorer) | Needs a free [personal API token](https://lichess.org/account/oauth/token/create?description=COAT+opening+explorer) with no scopes. The token is stored only in your browser's localStorage |
+| Move statistics | [Lichess opening explorer](https://lichess.org/api#tag/Opening-Explorer) | Needs a free [personal API token](https://lichess.org/account/oauth/token/create?description=COAT+opening+explorer) with no permissions. It is kept for the current tab only, unless you choose to remember it on your device |
 | Your games | [Lichess game export](https://lichess.org/api#tag/Games/operation/apiGamesUser) and [Chess.com published data](https://www.chess.com/news/view/published-data-api) | Public data. No account needed |
 
 ## Development
@@ -81,6 +81,13 @@ tests/                 unit tests
 Pushing to `main` deploys the app to GitHub Pages through
 `.github/workflows/pages.yml`. Before the first deploy, enable Pages in the
 repository settings: **Settings → Pages → Source: GitHub Actions**.
+
+## Security
+
+COAT has no backend and never sends your data anywhere except the Lichess
+and Chess.com APIs. The built site ships a Content-Security-Policy, bundles
+its own fonts, and treats all API and file data as plain text. See
+[SECURITY.md](SECURITY.md) for details and for how to report a problem.
 
 ## Built with
 
