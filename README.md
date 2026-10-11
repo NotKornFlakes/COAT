@@ -16,8 +16,10 @@ backend, and everything runs in your browser.
   orders, so transpositions are recognised.
 - list the book moves: every named line that continues from the current
   position.
-- show the engine evaluation and the top three lines from the Lichess cloud
-  evaluation database.
+- show the engine evaluation and the top three lines, either from the Lichess
+  cloud evaluation database or from **Stockfish 19 running in your browser**.
+  Switch the engine on with "Stockfish in your browser". It works for any
+  position and doesn't need an internet connection once it's loaded.
 - show move statistics from the master and Lichess game databases: how often
   each move is played and the White / draw / Black results.
 
@@ -39,6 +41,7 @@ Lines can be shared as links. The URL hash holds the moves, for example
 | --- | --- | --- |
 | Opening names, ECO codes, book lines | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | CC0. Bundled in `data/chess-openings/`, so it works offline |
 | Engine evaluations | [Lichess cloud eval API](https://lichess.org/api#tag/Analysis) | No account needed. Only covers positions Lichess has stored, which includes most common opening positions |
+| Local engine | [Stockfish 19](https://stockfishchess.org/) via [stockfish.js](https://github.com/nmrugg/stockfish.js) (lite, single-threaded WebAssembly build) | GPL-3.0. Vendored in `public/engine/` and loaded only when you switch it on (~1.9 MB). It runs in a Web Worker, so the page stays responsive |
 | Move statistics | [Lichess opening explorer](https://lichess.org/api#tag/Opening-Explorer) | Needs a free [personal API token](https://lichess.org/account/oauth/token/create?description=COAT+opening+explorer) with no permissions. It is kept for the current tab only, unless you choose to remember it on your device |
 | Your games | [Lichess game export](https://lichess.org/api#tag/Games/operation/apiGamesUser) and [Chess.com published data](https://www.chess.com/news/view/published-data-api) | Public data. No account needed |
 
@@ -70,6 +73,8 @@ data/chess-openings/   the Lichess TSV dataset (CC0)
 scripts/               build-openings.mjs: TSV to pre-indexed JSON
 src/chess/openings.ts  OpeningBook: name lookup, book moves, classification, search
 src/api/               Lichess and Chess.com clients
+src/engine/            Stockfish Web Worker wrapper (UCI protocol)
+public/engine/         Stockfish WebAssembly build (GPL-3.0, see its README)
 src/analysis/games.ts  PGN parsing, game normalisation, per-opening stats
 src/ui/                the chessboard and DOM helpers
 src/main.ts            app wiring
@@ -101,11 +106,22 @@ small hand-written component with no UI framework.
   position replaces the rest of the line instead of creating a variation.
 - Pieces are drawn with Unicode chess symbols, so their look depends on your
   system fonts.
-- Engine evaluations exist only for positions in Lichess's cloud database. A
-  local engine (Stockfish WebAssembly) would be a natural next step.
+- The in-browser engine is the "lite" Stockfish build. It uses a much smaller
+  neural network than full Stockfish, so it is weaker, but still far stronger
+  than any human. The full multi-threaded build would need cross-origin
+  isolation headers, which GitHub Pages can't send, and a ~100 MB download.
 
 ## License
 
-The code is released under the [MIT License](LICENSE). The opening dataset in
-`data/chess-openings/` is from lichess-org/chess-openings and is dedicated to
-the public domain under [CC0](data/chess-openings/COPYING.txt).
+COAT's own code is released under the [MIT License](LICENSE).
+
+Two third-party components keep their own licenses:
+
+- **Stockfish** (`public/engine/`) is licensed under the
+  [GNU GPL v3](public/engine/COPYING.txt). COAT runs it unmodified as a separate
+  program in a Web Worker and talks to it only through the UCI protocol. Its
+  source code and build details are linked in
+  [public/engine/README.md](public/engine/README.md).
+- **The opening dataset** (`data/chess-openings/`) is from
+  lichess-org/chess-openings and is dedicated to the public domain under
+  [CC0](data/chess-openings/COPYING.txt).

@@ -6,7 +6,8 @@ import data from './data/openings.json';
 import { OpeningBook, uciToMove, type Opening, type OpeningData } from './chess/openings';
 import { Board } from './ui/board';
 import { formatCount, formatEval, h, resultBar, storage, token as savedToken } from './ui/dom';
-import { cloudEval, explorer, ApiError, lichessUserGames, type ExplorerDb } from './api/lichess';
+import { cloudEval, explorer, ApiError, lichessUserGames, type EvalLine, type ExplorerDb } from './api/lichess';
+import { ENGINE_NAME, LocalEngine } from './engine/stockfish';
 import { chessComUserGames } from './api/chesscom';
 import {
   aggregate,
@@ -156,6 +157,20 @@ function showTab(id: Tab) {
 }
 
 // Explore panel
+const localToggle = h('input', {
+  type: 'checkbox',
+  id: 'local-engine',
+  role: 'switch',
+  onchange: () => setLocalEngine(localToggle.checked),
+});
+localToggle.checked = storage('coat.localEngine') === '1';
+const engineSwitch = h(
+  'label',
+  { class: 'switch', for: 'local-engine', title: 'Run the Stockfish chess engine on this device instead of using Lichess’s stored evaluations' },
+  localToggle,
+  h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+  'Stockfish in your browser',
+);
 const evalSummary = h('div', { class: 'eval-summary' });
 const evalLines = h('ol', { class: 'eval-lines' });
 const bookList = h('ul', { class: 'book' });
@@ -186,7 +201,7 @@ addTab(
     h(
       'section',
       { class: 'block' },
-      h('h2', null, 'Engine evaluation'),
+      h('div', { class: 'block-head' }, h('h2', null, 'Engine evaluation'), engineSwitch),
       evalSummary,
       evalLines,
     ),
@@ -382,10 +397,19 @@ function renderBook() {
   }
 }
 
-// Engine evaluation (Lichess cloud eval)
+// Engine evaluation: the Lichess cloud database, or Stockfish running in
+// this browser (src/engine/stockfish.ts).
 
 let evalTimer = 0;
 let evalAbort: AbortController | null = null;
+let engine: LocalEngine | null = null;
+
+function setLocalEngine(on: boolean) {
+  localToggle.checked = on;
+  storage('coat.localEngine', on ? '1' : null);
+  if (!on) engine?.stop();
+  scheduleEval();
+}
 
 function setEvalBar(cp?: number, mate?: number) {
   let pct = 50;
@@ -394,55 +418,99 @@ function setEvalBar(cp?: number, mate?: number) {
   evalFill.style.height = `${pct}%`;
 }
 
+/** Shows evaluation lines (scores from White's side) for `fen`. */
+function renderEval(fen: string, lines: EvalLine[], source: string) {
+  const best = lines[0];
+  setEvalBar(best.cp, best.mate);
+  evalSummary.className = 'eval-summary';
+  evalSummary.replaceChildren(
+    h('strong', { class: 'eval-big' }, formatEval(best.cp, best.mate)),
+    h('span', { class: 'muted' }, ` ${source}, from White’s side`),
+  );
+  evalLines.replaceChildren(
+    ...lines.map((l) => {
+      const li = h('li', null, h('span', { class: 'eval-chip' }, formatEval(l.cp, l.mate)));
+      const chess = new Chess(fen);
+      l.san.forEach((san, i) => {
+        const { n, white } = moveNumber(chess.fen());
+        if (white || i === 0) li.append(h('span', { class: 'num' }, white ? `${n}.` : `${n}…`));
+        const upTo = l.uci.slice(0, i + 1);
+        li.append(h('button', { type: 'button', class: 'pv-move', onclick: () => upTo.forEach((u) => play(u)) }, san));
+        chess.move(uciToMove(l.uci[i]));
+      });
+      return li;
+    }),
+  );
+}
+
 function scheduleEval() {
   clearTimeout(evalTimer);
   evalAbort?.abort();
   const fen = currentFen();
   const chess = new Chess(fen);
-  evalLines.replaceChildren();
   if (chess.isGameOver()) {
+    engine?.stop();
+    evalLines.replaceChildren();
+    evalSummary.className = 'eval-summary';
     evalSummary.textContent = chess.isCheckmate() ? 'Checkmate.' : 'Game over: draw.';
     setEvalBar(chess.isCheckmate() ? (chess.turn() === 'w' ? -10000 : 10000) : 0);
     return;
   }
-  evalSummary.textContent = 'Looking up evaluation…';
+  if (localToggle.checked) {
+    if (!engine) {
+      evalLines.replaceChildren();
+      evalSummary.className = 'eval-summary muted';
+      evalSummary.textContent = 'Loading Stockfish (about 2 MB, only the first time)…';
+    }
+    evalTimer = window.setTimeout(() => analyzeLocally(fen), 120);
+    return;
+  }
+  engine?.stop();
+  evalLines.replaceChildren();
   evalSummary.className = 'eval-summary muted';
+  evalSummary.textContent = 'Looking up evaluation…';
   evalTimer = window.setTimeout(async () => {
     evalAbort = new AbortController();
     try {
       const ev = await cloudEval(fen, 3, evalAbort.signal);
-      if (fen !== currentFen()) return;
+      if (fen !== currentFen() || localToggle.checked) return;
       if (!ev) {
-        evalSummary.textContent = 'No stored evaluation for this position. Lichess keeps evaluations mainly for common positions.';
         setEvalBar(0);
+        evalSummary.className = 'eval-summary muted';
+        evalSummary.replaceChildren(
+          'Lichess has no stored evaluation for this position. ',
+          h('button', { type: 'button', class: 'link', onclick: () => setLocalEngine(true) }, 'Analyze with Stockfish in your browser'),
+        );
         return;
       }
-      const best = ev.lines[0];
-      setEvalBar(best.cp, best.mate);
-      evalSummary.className = 'eval-summary';
-      evalSummary.replaceChildren(
-        h('strong', { class: 'eval-big' }, formatEval(best.cp, best.mate)),
-        h('span', { class: 'muted' }, ` depth ${ev.depth}, from White’s side`),
-      );
-      for (const l of ev.lines) {
-        const li = h('li', null, h('span', { class: 'eval-chip' }, formatEval(l.cp, l.mate)));
-        const chess = new Chess(fen);
-        l.san.forEach((san, i) => {
-          const { n, white } = moveNumber(chess.fen());
-          if (white || i === 0) li.append(h('span', { class: 'num' }, white ? `${n}.` : `${n}…`));
-          const upTo = l.uci.slice(0, i + 1);
-          li.append(
-            h('button', { type: 'button', class: 'pv-move', onclick: () => upTo.forEach((u) => play(u)) }, san),
-          );
-          chess.move(uciToMove(l.uci[i]));
-        });
-        evalLines.append(li);
-      }
+      renderEval(fen, ev.lines, `Lichess cloud, depth ${ev.depth}`);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
-      evalSummary.textContent = 'Could not reach Lichess for an evaluation. Check your connection.';
+      evalSummary.className = 'eval-summary muted';
+      evalSummary.replaceChildren(
+        'Could not reach Lichess for an evaluation. ',
+        h('button', { type: 'button', class: 'link', onclick: () => setLocalEngine(true) }, 'Use Stockfish in your browser instead'),
+      );
     }
   }, 250);
+}
+
+function analyzeLocally(fen: string) {
+  engine ??= new LocalEngine({ multiPv: 3, depth: 20 });
+  engine
+    .analyze(fen, (a) => {
+      if (a.fen !== currentFen() || !localToggle.checked) return;
+      const speed = a.nps ? `, ${formatCount(a.nps)} positions/s` : '';
+      renderEval(fen, a.lines, `${ENGINE_NAME} in your browser, depth ${a.depth}${a.done ? '' : '…'}${speed}`);
+    })
+    .catch(() => {
+      engine = null;
+      localToggle.checked = false;
+      storage('coat.localEngine', null);
+      evalLines.replaceChildren();
+      evalSummary.className = 'eval-summary muted';
+      evalSummary.textContent = 'Stockfish could not start in this browser. It needs WebAssembly, which very old browsers lack.';
+    });
 }
 
 // Games database (Lichess opening explorer)
