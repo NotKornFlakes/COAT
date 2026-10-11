@@ -25,6 +25,11 @@ COAT is a static site with no backend, no database and no accounts.
   projects.
 - **Validated API data.** Chess.com archive links are only followed when they
   point to `https://api.chess.com/pub/player/<user>/games/<yyyy>/<mm>`.
+- **Local engine.** Stockfish runs in a Web Worker served from this site.
+  The policy did not need loosening for it: no `unsafe-eval` or
+  `wasm-unsafe-eval` is allowed on the page. The engine files are vendored with
+  their SHA-256 hashes recorded in `public/engine/README.md`.
 - **Supply chain.** GitHub Actions are pinned to exact commits, workflows get
   read-only permissions by default, and Dependabot keeps npm packages and
-  actions up to date.
+  actions up to date. The vendored Stockfish build is updated by hand (see
+  `public/engine/README.md`).
